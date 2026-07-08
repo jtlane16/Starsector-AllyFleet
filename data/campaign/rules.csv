@@ -1,5 +1,4 @@
 id,trigger,conditions,script,text,options,notes
-# Ally Fleet Administration - adds option to station market interactions
 allyfleetAddOption,DialogOptionSelected,"$option == marketOpenCoreUI
-$allyFleetAvailable","AddOption allyfleetDialog ""Ally Fleet Administration"" ""Create or manage permanent ally fleets""","",,Adds the admin option when opening a market
-allyfleetOpenDialog,DialogOptionSelected,"$option == allyfleetDialog","allyfleet.dialog.AllyFleetDialogCmd","","",Opens the ally fleet creation/dialog
+$allyFleetAvailable","AddOption 15 allyfleetDialog AllyFleetAdministration",,,
+allyfleetOpenDialog,DialogOptionSelected,$option == allyfleetDialog,AllyFleetDialogCmd,,,
