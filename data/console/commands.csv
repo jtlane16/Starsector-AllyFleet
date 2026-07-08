@@ -1,0 +1,2 @@
+command,class,tags,syntax,help
+allyfleet_create,allyfleet.dialog.AllyFleetCreateCmd,"allyfleet,cheat",allyfleet_create [fleetName],Creates a new ally fleet at the nearest market with the given name.

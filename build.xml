@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="AllyFleet" default="build" basedir=".">
+    <description>Ally Fleet mod for Starsector</description>
+
+    <property name="src" location="src"/>
+    <property name="build" location="build"/>
+    <property name="dist" location="jars"/>
+    <property name="starsector.core" value="G:/Standalone/Starsector/starsector-core"/>
+
+    <path id="classpath">
+        <fileset dir="${starsector.core}">
+            <include name="starfarer.api.jar"/>
+            <include name="starfarer_obf.jar"/>
+            <include name="log4j-1.2.9.jar"/>
+            <include name="json.jar"/>
+        </fileset>
+    </path>
+
+    <target name="clean">
+        <delete dir="${build}"/>
+        <delete file="${dist}/AllyFleet.jar"/>
+    </target>
+
+    <target name="compile">
+        <mkdir dir="${build}"/>
+        <javac srcdir="${src}" destdir="${build}" classpathref="classpath"
+               source="17" target="17" debug="true" includeantruntime="false"
+               encoding="UTF-8">
+        </javac>
+    </target>
+
+    <target name="build" depends="compile">
+        <mkdir dir="${dist}"/>
+        <jar destfile="${dist}/AllyFleet.jar" basedir="${build}">
+            <manifest>
+                <attribute name="ModPlugin" value="allyfleet.AllyFleetModPlugin"/>
+            </manifest>
+        </jar>
+    </target>
+
+    <target name="deploy" depends="build">
+        <copy file="${dist}/AllyFleet.jar" todir="G:/Standalone/Starsector/mods/AllyFleet/jars/" overwrite="true"/>
+        <copy todir="G:/Standalone/Starsector/mods/AllyFleet/" overwrite="true">
+            <fileset dir=".">
+                <include name="mod_info.json"/>
+                <include name="README.md"/>
+                <include name="data/**"/>
+                <include name="graphics/**"/>
+            </fileset>
+        </copy>
+    </target>
+
+    <target name="setup">
+        <mkdir dir="G:/Standalone/Starsector/mods/AllyFleet"/>
+        <mkdir dir="G:/Standalone/Starsector/mods/AllyFleet/jars"/>
+        <mkdir dir="G:/Standalone/Starsector/mods/AllyFleet/data"/>
+    </target>
+</project>

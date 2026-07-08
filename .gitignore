@@ -1,0 +1,21 @@
+# Java
+*.class
+*.jar
+!jars/*.jar
+
+# IDE
+.classpath
+.project
+.settings/
+*.iml
+.nbproject/
+nbproject/
+
+# Build artifacts
+build/
+dist/
+temp/
+
+# OS
+.DS_Store
+Thumbs.db
