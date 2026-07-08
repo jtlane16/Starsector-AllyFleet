@@ -139,6 +139,95 @@ public class AllyTradeAI {
                 goToMarket(fleet, target, "seeking trade goods");
             }
         }
+
+        // ── 5. Consider buying a ship for balanced fleet growth ──
+        if (currentMarket != null) {
+            tryBuyShip(ally, fleet, currentMarket);
+        }
+    }
+
+    /** Attempt to buy a ship that fills a role gap in the fleet. */
+    private static void tryBuyShip(AllyFleet ally, CampaignFleetAPI fleet, MarketAPI market) {
+        if (market.getFaction().isHostileTo(ally.getFaction())) return;
+
+        float credits = ally.getCredits();
+        if (credits < RESERVE_CREDITS + 20000) return; // can't afford anything
+
+        // Count current ships
+        int frigates = 0, destroyers = 0, freighters = 0;
+        for (com.fs.starfarer.api.fleet.FleetMemberAPI m : fleet.getFleetData().getMembersInPriorityOrder()) {
+            if (m.isFighterWing()) continue;
+            float dp = m.getUnmodifiedDeploymentPointsCost();
+            boolean isFreighter = m.getVariant().hasHullMod("cargoholds") || m.getHullSpec().getHints().contains(com.fs.starfarer.api.combat.ShipHullSpecAPI.ShipTypeHints.FREIGHTER) || m.getHullSpec().getHints().contains(com.fs.starfarer.api.combat.ShipHullSpecAPI.ShipTypeHints.TANKER);
+            if (isFreighter) freighters++;
+            else if (dp <= 8) frigates++;
+            else destroyers++;
+        }
+
+        // Determine which role to buy
+        String targetVariantId = null;
+        int total = Math.max(1, frigates + destroyers + freighters);
+
+        // Target: ~40% combat frigates, ~30% combat larger, ~30% freighters
+        float frigatePct = frigates / (float)total;
+        float destroyerPct = destroyers / (float)total;
+        float freighterPct = freighters / (float)total;
+
+        String factionId = ally.getFactionId();
+
+        if (freighterPct < 0.25f) {
+            targetVariantId = pickFreighterVariant(factionId);
+        } else if (frigatePct < 0.35f) {
+            targetVariantId = pickFrigateVariant(factionId);
+        } else if (destroyerPct < 0.25f) {
+            targetVariantId = pickDestroyerVariant(factionId);
+        } else {
+            targetVariantId = pickFrigateVariant(factionId); // round out with frigates
+        }
+
+        if (targetVariantId == null) return;
+
+        // Calculate cost (750 credits per DP)
+        com.fs.starfarer.api.fleet.FleetMemberAPI temp =
+                Global.getFactory().createFleetMember(com.fs.starfarer.api.fleet.FleetMemberType.SHIP, targetVariantId);
+        float dp = temp.getUnmodifiedDeploymentPointsCost();
+        float cost = dp * 750f;
+
+        if (cost > credits - RESERVE_CREDITS) return; // can't afford with reserve
+
+        // Check crew space
+        int crew = temp.getCrewComposition().getCrewInt();
+        int freeCrew = fleet.getCargo().getFreeCrewSpace();
+        if (crew > freeCrew) return;
+
+        // Buy the ship
+        if (ally.spendCredits(cost)) {
+            fleet.getFleetData().addFleetMember(temp);
+            fleet.forceSync();
+            log.info(ally.getFleetName() + " bought "
+                    + temp.getHullSpec().getHullNameWithDashClass() + " for $" + (int)cost);
+            Global.getSector().getCampaignUI().addMessage(
+                    ally.getFleetName() + ": bought "
+                    + temp.getHullSpec().getHullNameWithDashClass()
+                    + " for $" + (int)cost, Misc.getPositiveHighlightColor());
+        }
+    }
+
+    private static String pickFreighterVariant(String factionId) {
+        String[] options = {"buffalo_Standard", "buffalo_FS", "kite_Standard", "kite_Scout"};
+        return options[(int)(Math.random() * options.length)];
+    }
+
+    private static String pickFrigateVariant(String factionId) {
+        String[] options = {"lasher_Standard", "lasher_Assault", "wolf_Standard", "wolf_Assault",
+                "vigilance_FS", "tempest_Assault", "centurion_Standard"};
+        return options[(int)(Math.random() * options.length)];
+    }
+
+    private static String pickDestroyerVariant(String factionId) {
+        String[] options = {"hammerhead_Elite", "sunder_Assault", "enforcer_Assault", "medusa_Standard",
+                "condor_Standard"};
+        return options[(int)(Math.random() * options.length)];
     }
 
     /** Get buy price per unit (approximate, includes supply-side modifier) */

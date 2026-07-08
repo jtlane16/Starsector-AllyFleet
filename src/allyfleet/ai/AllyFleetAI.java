@@ -3,24 +3,21 @@ package allyfleet.ai;
 import allyfleet.AllyAction;
 import allyfleet.AllyFleet;
 import allyfleet.controllers.AllyFleetController;
+import allyfleet.util.AllyFleetSupplyManager;
 import allyfleet.util.AllyTradeAI;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.campaign.FleetAssignment;
-import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.campaign.rules.MemoryAPI;
 import com.fs.starfarer.api.util.IntervalUtil;
 import com.fs.starfarer.api.util.Misc;
-import org.apache.log4j.Logger;
-import org.lwjgl.util.vector.Vector2f;
 
 /**
- * AI script for the single ally fleet — handles Follow and Trade objectives.
+ * AI for the single ally fleet — Follow and Trade objectives.
+ * Supply consumption runs every frame; auto-resupply only happens in Trade mode.
  */
 public class AllyFleetAI implements EveryFrameScript {
-
-    public static Logger log = Global.getLogger(AllyFleetAI.class);
 
     private static final float UPDATE_INTERVAL_DAYS = 0.25f;
     private static final float RESP_DELAY = 7f;
@@ -70,6 +67,9 @@ public class AllyFleetAI implements EveryFrameScript {
 
             AllyAction action = currentObjective(ally);
 
+            // ── Supply consumption (every frame) ──────────────────
+            AllyFleetSupplyManager.process(ally, fleet, days);
+
             // ── FOLLOW: per-frame override ────────────────────────
             if (action == AllyAction.FOLLOW && fleet.getBattle() == null) {
                 if (fleet.getContainingLocation() == player.getContainingLocation()) {
@@ -83,8 +83,9 @@ public class AllyFleetAI implements EveryFrameScript {
                 }
             }
 
-            // ── TRADE: periodic logic ─────────────────────────────
+            // ── TRADE: periodic + supply resupply ─────────────
             if (action == AllyAction.TRADE && tradeTimer.intervalElapsed()) {
+                AllyFleetSupplyManager.autoResupply(ally, fleet);
                 AllyTradeAI.doTradeTick(ally, fleet);
             }
         }
