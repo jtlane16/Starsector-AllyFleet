@@ -2,6 +2,7 @@ package allyfleet.util;
 
 import allyfleet.AllyAction;
 import allyfleet.AllyFleet;
+import allyfleet.util.AILog;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Abilities;
@@ -66,12 +67,21 @@ public class AllyFleetSupplyManager {
 
         if (ratio < CRITICAL_THRESHOLD) {
             applyCriticalPenalty(fleet, true);
-            if (!inPenalty) log.info(ally.getFleetName() + " supplies CRITICAL (" + (int)current + "/" + (int)targetStock + ")");
+            if (!inPenalty) {
+                AILog.logSupply("CRITICAL — supplies=" + (int)current + "/" + (int)targetStock
+                        + " dailyUse=" + (int)dailyUse + " daysLeft=" + (int)(current/dailyUse));
+                log.info(ally.getFleetName() + " supplies CRITICAL (" + (int)current + "/" + (int)targetStock + ")");
+            }
         } else if (ratio < LOW_THRESHOLD) {
             applyLowPenalty(fleet, true);
-            if (!inPenalty) log.info(ally.getFleetName() + " supplies LOW (" + (int)current + "/" + (int)targetStock + ")");
+            if (!inPenalty) {
+                AILog.logSupply("LOW — supplies=" + (int)current + "/" + (int)targetStock
+                        + " dailyUse=" + (int)dailyUse + " daysLeft=" + (int)(current/dailyUse));
+                log.info(ally.getFleetName() + " supplies LOW (" + (int)current + "/" + (int)targetStock + ")");
+            }
         } else if (ratio > RESTORE_THRESHOLD && inPenalty) {
             restoreAll(fleet);
+            AILog.logSupply("RESTORED — supplies=" + (int)current + "/" + (int)targetStock);
             log.info(ally.getFleetName() + " supplies restored (" + (int)current + "/" + (int)targetStock + ")");
         }
     }
@@ -105,6 +115,9 @@ public class AllyFleetSupplyManager {
 
         if (ally.spendCredits(cost)) {
             fleet.getCargo().addSupplies((int)toBuy);
+            AILog.logSupply("BOUGHT " + (int)toBuy + " supplies for $" + (int)cost
+                    + " (now=" + (int)fleet.getCargo().getSupplies()
+                    + " dailyUse=" + (int)dailyUse + ")");
             Global.getSector().getCampaignUI().addMessage(
                     ally.getFleetName() + ": bought " + (int)toBuy + " supplies for $" + (int)cost,
                     Global.getSector().getPlayerFleet().getFaction().getBaseUIColor());

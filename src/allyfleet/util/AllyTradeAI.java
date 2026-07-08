@@ -1,6 +1,7 @@
 package allyfleet.util;
 
 import allyfleet.AllyFleet;
+import allyfleet.util.AILog;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.campaign.CargoAPI;
@@ -50,14 +51,21 @@ public class AllyTradeAI {
         CargoAPI cargo = fleet.getCargo();
         float credits = ally.getCredits();
 
-        // ── 1. Sell cargo at current market if profitable ────────
+        // ── 0. Log tick start ─────────────────────────────────────
         MarketAPI currentMarket = findCurrentMarket(fleet);
+        AILog.logTrade("Tick — credits=$" + (int)credits
+                + " cargoSpace=" + (int)cargo.getSpaceLeft()
+                + " atMarket=" + (currentMarket != null ? currentMarket.getName() : "NONE")
+                + " loc=" + (fleet.getContainingLocation() != null ? fleet.getContainingLocation().getName() : "null"));
+
+        // ── 1. Sell cargo at current market if profitable ────────
         if (currentMarket != null) {
             for (String good : TRADE_GOODS) {
                 float qty = cargo.getCommodityQuantity(good);
                 if (qty <= 0) continue;
                 CommodityOnMarketAPI com = currentMarket.getCommodityData(good);
                 int deficit = com.getDeficitQuantity();
+                AILog.logTrade("  sell-check: " + good + " qty=" + (int)qty + " deficit=" + deficit);
                 if (deficit > 0 && qty > 0) {
                     float sellQty = Math.min(qty, deficit);
                     float sellPrice = getSellPrice(com);
@@ -65,6 +73,8 @@ public class AllyTradeAI {
                     ally.addCredits(revenue);
                     cargo.removeCommodity(good, sellQty);
                     com.removeFromStockpile(-sellQty); // market buys from us
+                    AILog.logTrade("  SOLD " + (int)sellQty + " " + good + " for $" + (int)revenue
+                            + " at " + currentMarket.getName());
 
                     log.info(ally.getFleetName() + " sold " + (int)sellQty + " " + good
                             + " at " + currentMarket.getName() + " for $" + (int)revenue);
@@ -88,8 +98,13 @@ public class AllyTradeAI {
 
             MarketAPI sellMarket = findBestSellMarket(good, qty, fleet);
             if (sellMarket != null && sellMarket != currentMarket) {
+                AILog.logTrade("  go sell " + (int)qty + " " + good + " at " + sellMarket.getName());
                 goToMarket(fleet, sellMarket, "selling " + good);
                 return;
+            } else if (sellMarket == null) {
+                AILog.logTrade("  no sell-market for cargo " + good + " (qty=" + (int)qty + ")");
+            } else {
+                AILog.logTrade("  already at best sell-market for " + good);
             }
         }
 
@@ -97,6 +112,8 @@ public class AllyTradeAI {
         if (currentMarket != null) {
             float available = fleet.getCargo().getSpaceLeft();
             float spendable = Math.max(0, credits - RESERVE_CREDITS);
+            AILog.logTrade("  buy-check: space=" + (int)available + " spendable=" + (int)spendable
+                    + " at " + currentMarket.getName());
             if (available > 10 && spendable > 1000) {
                 for (String good : TRADE_GOODS) {
                     CommodityOnMarketAPI com = currentMarket.getCommodityData(good);
@@ -110,12 +127,19 @@ public class AllyTradeAI {
                     if (maxBuy <= 0) continue;
 
                     // Check if there's a market to sell to
-                    if (findBestSellMarket(good, maxBuy, fleet) == null) continue;
+                    MarketAPI sellTo = findBestSellMarket(good, maxBuy, fleet);
+                    if (sellTo == null) {
+                        AILog.logTrade("    " + good + ": excess=" + excess + " buyPrice=" + (int)buyPrice
+                                + " maxBuy=" + maxBuy + " — no sell destination, skipping");
+                        continue;
+                    }
 
                     float cost = maxBuy * buyPrice;
                     if (ally.spendCredits(cost)) {
                         cargo.addCommodity(good, maxBuy);
                         com.addToStockpile(-maxBuy); // market sells to us
+                        AILog.logTrade("  BOUGHT " + maxBuy + " " + good + " for $" + (int)cost
+                                + " at " + currentMarket.getName() + ", selling at " + sellTo.getName());
 
                         log.info(ally.getFleetName() + " bought " + maxBuy + " " + good
                                 + " at " + currentMarket.getName() + " for $" + (int)cost);
@@ -124,8 +148,7 @@ public class AllyTradeAI {
                                 + " for $" + (int)cost, Misc.getNegativeHighlightColor());
 
                         // Go sell it
-                        MarketAPI sellDest = findBestSellMarket(good, maxBuy, fleet);
-                        if (sellDest != null) goToMarket(fleet, sellDest, "selling " + good);
+                        if (sellTo != null) goToMarket(fleet, sellTo, "selling " + good);
                         return;
                     }
                 }
@@ -136,14 +159,23 @@ public class AllyTradeAI {
         if (cargo.getSpaceLeft() > 10 && credits > RESERVE_CREDITS + 10000) {
             MarketAPI target = findBestBuyMarket(fleet);
             if (target != null && target != currentMarket) {
+                AILog.logTrade("  seeking trade at " + target.getName()
+                        + " (dist=" + (int) Misc.getDistance(fleet.getLocationInHyperspace(), target.getLocationInHyperspace()) + ")");
                 goToMarket(fleet, target, "seeking trade goods");
+            } else if (target == null) {
+                AILog.logTrade("  no buy-market found anywhere — all economies saturated?");
+            } else {
+                AILog.logTrade("  best buy-market is current market — waiting");
             }
+        } else {
+            AILog.logTrade("  no travel: space=" + (int)cargo.getSpaceLeft() + " credits=" + (int)credits);
         }
 
         // ── 5. Consider buying a ship for balanced fleet growth ──
         if (currentMarket != null) {
             tryBuyShip(ally, fleet, currentMarket);
         }
+        AILog.logTrade("  tick end — idle");
     }
 
     /** Attempt to buy a ship that fills a role gap in the fleet. */

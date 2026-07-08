@@ -3,6 +3,7 @@ package allyfleet.ai;
 import allyfleet.AllyAction;
 import allyfleet.AllyFleet;
 import allyfleet.controllers.AllyFleetController;
+import allyfleet.util.AILog;
 import allyfleet.util.AllyFleetSupplyManager;
 import allyfleet.util.AllyTradeAI;
 import com.fs.starfarer.api.EveryFrameScript;
@@ -85,6 +86,8 @@ public class AllyFleetAI implements EveryFrameScript {
 
             // ── TRADE: periodic + supply resupply ─────────────
             if (action == AllyAction.TRADE && tradeTimer.intervalElapsed()) {
+                AILog.logAI("Trade tick firing — fleet=" + (fleet != null ? fleet.getName() : "null")
+                        + " loc=" + (fleet.getContainingLocation() != null ? fleet.getContainingLocation().getName() : "null"));
                 AllyFleetSupplyManager.autoResupply(ally, fleet);
                 AllyTradeAI.doTradeTick(ally, fleet);
             }
