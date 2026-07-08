@@ -246,11 +246,15 @@ public class AllyTradeAI {
 
     /** Find the market the fleet is currently at (orbiting or very close to) */
     private static MarketAPI findCurrentMarket(CampaignFleetAPI fleet) {
+        if (fleet.getContainingLocation() == null) return null;
         MarketAPI nearest = null;
-        float bestDist = 80f; // must be orbiting/adjacent to the station
+        float bestDist = 150f;
         for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
             if (m.isHidden() || !m.hasSpaceport()) continue;
-            float dist = Misc.getDistance(fleet.getLocationInHyperspace(), m.getLocationInHyperspace());
+            // Must be in the same location (same star system or hyperspace)
+            if (m.getContainingLocation() != fleet.getContainingLocation()) continue;
+            if (m.getPrimaryEntity() == null) continue;
+            float dist = Misc.getDistance(fleet.getLocation(), m.getPrimaryEntity().getLocation());
             if (dist < bestDist) { bestDist = dist; nearest = m; }
         }
         return nearest;
