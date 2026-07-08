@@ -7,7 +7,7 @@ import allyfleet.ui.AllyFleetIntel;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
-import com.fs.starfarer.api.campaign.CampaignUIAPI.CampaignUITabs;
+import com.fs.starfarer.api.campaign.CoreUITabId;
 import com.fs.starfarer.api.campaign.listeners.CampaignUIRenderingListener;
 import com.fs.starfarer.api.combat.ViewportAPI;
 import com.fs.starfarer.api.ui.Fonts;
@@ -92,7 +92,7 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Ever
                         Global.getSector().getIntelManager().addIntel(new AllyFleetIntel(), false);
                     }
                     // Open intel tab
-                    Global.getSector().getCampaignUI().setCurrentTab(CampaignUITabs.INTEL);
+                    Global.getSector().getCampaignUI().showCoreUITab(CoreUITabId.INTEL);
                 });
 
         // Mouse polling

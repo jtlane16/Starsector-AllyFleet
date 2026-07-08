@@ -1,8 +1,11 @@
 package allyfleet.ui;
 
+import allyfleet.AllyFleet;
 import allyfleet.controllers.AllyFleetController;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
+import com.fs.starfarer.api.campaign.FactionAPI;
+import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.impl.campaign.intel.BaseIntelPlugin;
 import com.fs.starfarer.api.ui.SectorMapAPI;
 import com.fs.starfarer.api.ui.TooltipMakerAPI;
@@ -66,7 +69,7 @@ public class AllyFleetIntel extends BaseIntelPlugin {
     }
 
     @Override
-    public FactionAPI getFactionForUIColor() {
+    public FactionAPI getFactionForUIColors() {
         return Global.getSector().getPlayerFaction();
     }
 
