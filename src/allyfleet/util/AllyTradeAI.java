@@ -333,7 +333,7 @@ public class AllyTradeAI {
         return best;
     }
 
-    /** Find the best market to SELL a given commodity */
+    /** Find any friendly market different from the current one — for selling */
     private static MarketAPI findBestSellMarket(String good, float qty, CampaignFleetAPI fleet) {
         MarketAPI best = null;
         float bestPrice = 0;
@@ -341,13 +341,13 @@ public class AllyTradeAI {
             if (m.isHidden() || !m.hasSpaceport()) continue;
             if (m.getFaction().isHostileTo(fleet.getFaction())) continue;
             CommodityOnMarketAPI com = m.getCommodityData(good);
-            float sellPrice = getSellPrice(com);
-            if (sellPrice > bestPrice) { bestPrice = sellPrice; best = m; }
+            float sellPrice = com != null ? getSellPrice(com) : 0;
+            if (sellPrice > bestPrice || best == null) { bestPrice = sellPrice; best = m; }
         }
         return best;
     }
 
-    /** Find the best market to BUY goods (has surplus of something we can carry) */
+    /** Find the best market to BUY goods — any friendly market with trade goods */
     private static MarketAPI findBestBuyMarket(CampaignFleetAPI fleet, MarketAPI skipMarket) {
         MarketAPI best = null;
         float bestScore = -999999;
@@ -356,19 +356,14 @@ public class AllyTradeAI {
             if (m.isHidden() || !m.hasSpaceport()) continue;
             if (m == skipMarket) continue;
             if (m.getFaction().isHostileTo(fleet.getFaction())) continue;
-            float score = 0;
+            int goodsAvailable = 0;
             for (String good : TRADE_GOODS) {
                 CommodityOnMarketAPI com = m.getCommodityData(good);
-                float buyPrice = getBuyPrice(com);
+                float buyPrice = com != null ? getBuyPrice(com) : 999999;
                 int maxBuy = (int)(spendable / Math.max(1, buyPrice));
-                if (maxBuy <= 0) continue;
-                MarketAPI sellTo = findBestSellMarket(good, maxBuy, fleet);
-                if (sellTo == null || sellTo == m || sellTo == skipMarket) continue;
-                float sellPrice = getSellPrice(sellTo.getCommodityData(good));
-                float margin = (sellPrice - buyPrice) * maxBuy;
-                if (margin > 0) score += margin;
+                if (maxBuy > 0) goodsAvailable++;
             }
-            // Prefer markets with profit, slightly bias closer ones
+            float score = goodsAvailable * 100;
             float distPenalty = Misc.getDistance(fleet.getLocationInHyperspace(), m.getLocationInHyperspace()) / 100f;
             score -= distPenalty;
             if (score > bestScore) { bestScore = score; best = m; }
