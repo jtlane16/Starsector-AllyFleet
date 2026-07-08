@@ -4,6 +4,7 @@ import allyfleet.ai.AllyFleetAI;
 import allyfleet.controllers.AllyFleetController;
 import allyfleet.listeners.AllyFleetMonthlyListener;
 import allyfleet.plugins.AllyFleetCampaignPlugin;
+import allyfleet.ui.AllyFleetOverlayWidget;
 import com.fs.starfarer.api.BaseModPlugin;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
@@ -19,6 +20,9 @@ public class AllyFleetModPlugin extends BaseModPlugin {
 
     public static final String MOD_ID = "allyfleet";
     public static final String ALLY_FLEET_DATA_KEY = "allyfleet_data";
+
+    // Single overlay widget instance used as script + listener
+    private AllyFleetOverlayWidget overlayWidget;
 
     @Override
     public void configureXStream(XStream x) {
@@ -42,6 +46,7 @@ public class AllyFleetModPlugin extends BaseModPlugin {
         }
 
         registerScripts(sector);
+        registerOverlay(sector);
     }
 
     @Override
@@ -51,6 +56,7 @@ public class AllyFleetModPlugin extends BaseModPlugin {
         SectorAPI sector = Global.getSector();
         initPersistentData(sector);
         registerScripts(sector);
+        registerOverlay(sector);
 
         log.info("Ally Fleet mod enabled");
     }
@@ -61,9 +67,7 @@ public class AllyFleetModPlugin extends BaseModPlugin {
     }
 
     @Override
-    public void onNewGame() {
-        // Ally fleets are created mid-game by the player
-    }
+    public void onNewGame() {}
 
     @SuppressWarnings("unchecked")
     private void initPersistentData(SectorAPI sector) {
@@ -73,15 +77,24 @@ public class AllyFleetModPlugin extends BaseModPlugin {
     }
 
     private void registerScripts(SectorAPI sector) {
-        // Register campaign plugin for entity memory flags (station dialog hooks)
         sector.registerPlugin(new AllyFleetCampaignPlugin());
 
-        // Register main AI script (runs every frame, handles fleet decisions)
         if (!sector.hasTransientScript(AllyFleetAI.class)) {
             sector.addTransientScript(new AllyFleetAI());
         }
 
-        // Register monthly upkeep/income script
         sector.addScript(new AllyFleetMonthlyListener());
+    }
+
+    private void registerOverlay(SectorAPI sector) {
+        if (overlayWidget != null) return;
+        overlayWidget = new AllyFleetOverlayWidget();
+
+        // The ListenerManagerAPI handles dispatch to CampaignUIRenderingListener
+        // and CampaignInputListener implementations automatically.
+        sector.getListenerManager().addListener(overlayWidget, true);
+
+        // register as every-frame script for advance() calls
+        sector.addTransientScript(overlayWidget);
     }
 }
