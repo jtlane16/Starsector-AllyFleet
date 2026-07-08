@@ -5,7 +5,9 @@ import allyfleet.AllyFleet;
 import allyfleet.util.AILog;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
+import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Abilities;
+import com.fs.starfarer.api.util.Misc;
 import org.apache.log4j.Logger;
 
 /**
@@ -92,6 +94,20 @@ public class AllyFleetSupplyManager {
      */
     public static boolean autoResupply(AllyFleet ally, CampaignFleetAPI fleet) {
         if (ally == null || fleet == null || !fleet.isAlive()) return false;
+
+        // Only resupply at a station
+        if (fleet.getContainingLocation() == null) return false;
+        boolean atMarket = false;
+        for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
+            if (m.isHidden() || !m.hasSpaceport()) continue;
+            if (m.getContainingLocation() != fleet.getContainingLocation()) continue;
+            if (m.getPrimaryEntity() == null) continue;
+            if (Misc.getDistance(fleet.getLocation(), m.getPrimaryEntity().getLocation()) < 400f) {
+                atMarket = true;
+                break;
+            }
+        }
+        if (!atMarket) return false;
 
         float dailyUse = fleet.getTotalSupplyCostPerDay();
         float targetStock = dailyUse * DAYS_TARGET;

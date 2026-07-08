@@ -373,11 +373,17 @@ public class AllyTradeAI {
         return best;
     }
 
-    /** Send the fleet to a market */
+    /** Send the fleet to a market — skips if already assigned there */
     private static void goToMarket(CampaignFleetAPI fleet, MarketAPI market, String action) {
         if (market.getPrimaryEntity() == null) return;
+        // Don't clear assignments if already heading to this market
+        for (com.fs.starfarer.api.campaign.FleetAssignment assignment : fleet.getCurrentAssignments()) {
+            if (assignment.getTarget() == market.getPrimaryEntity()) {
+                return; // already going there
+            }
+        }
         fleet.clearAssignments();
         fleet.addAssignment(FleetAssignment.GO_TO_LOCATION, market.getPrimaryEntity(), 1000f, action);
-        fleet.addAssignment(FleetAssignment.ORBIT_PASSIVE, market.getPrimaryEntity(), 2f, "trading at " + market.getName());
+        fleet.addAssignment(FleetAssignment.ORBIT_PASSIVE, market.getPrimaryEntity(), 3f, "trading at " + market.getName());
     }
 }
