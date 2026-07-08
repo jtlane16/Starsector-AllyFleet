@@ -23,9 +23,9 @@ public class AllyTradeAI {
 
     // Commodities worth trading — bulk goods with stable demand
     private static final String[] TRADE_GOODS = {
-            "supplies", "fuel", "food", "domestic_goods", "machinery",
+            "supplies", "fuel", "food", "domestic_goods",
             "ore", "metals", "rare_ore", "rare_metals",
-            "organics", "volatiles", "transplutonics",
+            "organics", "volatiles",
             "heavy_machinery"
     };
 
@@ -244,10 +244,10 @@ public class AllyTradeAI {
         return base * (1f + mod);
     }
 
-    /** Find the market the fleet is currently at (or nearest to) */
+    /** Find the market the fleet is currently at (orbiting or very close to) */
     private static MarketAPI findCurrentMarket(CampaignFleetAPI fleet) {
         MarketAPI nearest = null;
-        float bestDist = 300f; // within range to be "at" a market
+        float bestDist = 80f; // must be orbiting/adjacent to the station
         for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
             if (m.isHidden() || !m.hasSpaceport()) continue;
             float dist = Misc.getDistance(fleet.getLocationInHyperspace(), m.getLocationInHyperspace());
