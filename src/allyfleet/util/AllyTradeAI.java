@@ -156,19 +156,26 @@ public class AllyTradeAI {
         }
 
         // ── 4. No trade to do — go to a nearby market to look ────
-        if (cargo.getSpaceLeft() > 10 && credits > RESERVE_CREDITS + 10000) {
+        if (credits > RESERVE_CREDITS + 10000) {
+            AILog.logTrade("  seeking market... space=" + (int)cargo.getSpaceLeft() + " credits=" + (int)credits);
             MarketAPI target = findBestBuyMarket(fleet);
             if (target != null && target != currentMarket) {
                 AILog.logTrade("  seeking trade at " + target.getName()
                         + " (dist=" + (int) Misc.getDistance(fleet.getLocationInHyperspace(), target.getLocationInHyperspace()) + ")");
                 goToMarket(fleet, target, "seeking trade goods");
             } else if (target == null) {
-                AILog.logTrade("  no buy-market found anywhere — all economies saturated?");
+                AILog.logTrade("  no buy-market found — trying nearest friendly market instead");
+                target = findNearestFriendlyMarket(fleet);
+                if (target != null && target != currentMarket) {
+                    goToMarket(fleet, target, "visiting market");
+                } else {
+                    AILog.logTrade("  no friendly market reachable");
+                }
             } else {
                 AILog.logTrade("  best buy-market is current market — waiting");
             }
         } else {
-            AILog.logTrade("  no travel: space=" + (int)cargo.getSpaceLeft() + " credits=" + (int)credits);
+            AILog.logTrade("  no travel: credits=" + (int)credits + " below reserve threshold");
         }
 
         // ── 5. Consider buying a ship for balanced fleet growth ──
@@ -290,6 +297,19 @@ public class AllyTradeAI {
             if (dist < bestDist) { bestDist = dist; nearest = m; }
         }
         return nearest;
+    }
+
+    /** Find the nearest friendly/neutral market with a spaceport */
+    private static MarketAPI findNearestFriendlyMarket(CampaignFleetAPI fleet) {
+        MarketAPI best = null;
+        float bestDist = Float.MAX_VALUE;
+        for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
+            if (m.isHidden() || !m.hasSpaceport()) continue;
+            if (m.getFaction().isHostileTo(fleet.getFaction())) continue;
+            float dist = Misc.getDistance(fleet.getLocationInHyperspace(), m.getLocationInHyperspace());
+            if (dist < bestDist) { bestDist = dist; best = m; }
+        }
+        return best;
     }
 
     /** Find the best market to SELL a given commodity */
