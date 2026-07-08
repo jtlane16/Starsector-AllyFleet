@@ -5,10 +5,7 @@ import allyfleet.AllyFleet;
 import allyfleet.controllers.AllyFleetController;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.CampaignFleetAPI;
-import com.fs.starfarer.api.campaign.FactionAPI;
-import com.fs.starfarer.api.campaign.FleetAssignment;
-import com.fs.starfarer.api.campaign.SectorEntityToken;
+import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.campaign.rules.MemoryAPI;
 import com.fs.starfarer.api.util.IntervalUtil;
@@ -20,22 +17,17 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * AI script running every frame for all ally fleets.
- * Handles behavior selection, smooth following, and respawn.
- */
 public class AllyFleetAI implements EveryFrameScript {
 
     public static Logger log = Global.getLogger(AllyFleetAI.class);
 
     private static final float UPDATE_INTERVAL_DAYS = 0.5f;
-    private static final float RESPAWN_DELAY_DAYS = 7f;
-    private static final float RESUPPLY_INTERVAL_DAYS = 5f;
-    private static final float FOLLOW_CLOSE_DIST = 250f;
+    private static final float FOLLOW_REISSUE_DIST = 600f;
+    private static final float FOLLOW_CLOSE_DIST = 300f;
 
     private IntervalUtil updateTimer = new IntervalUtil(UPDATE_INTERVAL_DAYS * 0.75f, UPDATE_INTERVAL_DAYS * 1.25f);
-    private IntervalUtil respawnTimer = new IntervalUtil(RESPAWN_DELAY_DAYS, RESPAWN_DELAY_DAYS);
-    private IntervalUtil resupplyTimer = new IntervalUtil(RESUPPLY_INTERVAL_DAYS, RESUPPLY_INTERVAL_DAYS);
+    private IntervalUtil respawnTimer = new IntervalUtil(7f, 7f);
+    private IntervalUtil resupplyTimer = new IntervalUtil(5f, 5f);
 
     public static final String KEY_LAST_ACTION = "$ally_lastAction";
     public static final String KEY_RETURNING_HOME = "$ally_returningHome";
@@ -64,22 +56,43 @@ public class AllyFleetAI implements EveryFrameScript {
             CampaignFleetAPI fleet = ally.getFleet();
 
             if (fleet != null && !fleet.isAlive()) {
-                ally.setFleet(null);
-                ally.setAlive(false);
-                fleet = null;
+                ally.setFleet(null); ally.setAlive(false); fleet = null;
             }
-
             if (!ally.isAlive()) {
-                if (respawnTimer.intervalElapsed()) {
-                    AllyFleetController.respawnFleet(ally);
-                }
+                if (respawnTimer.intervalElapsed()) AllyFleetController.respawnFleet(ally);
                 continue;
             }
             if (fleet == null) continue;
 
-            // Per-frame smooth following: if following player, override move dest to close distance
-            if (ally.getHighestPriorityAction() == AllyAction.FOLLOW && fleet.getBattle() == null) {
-                smoothFollow(fleet, playerFleet);
+            // Auto-set default follow priority if nothing configured
+            if (ally.getPriorityFollow() == 0 && ally.getPriorityDefend() == 0 &&
+                ally.getPriorityTrade() == 0 && ally.getPriorityPatrol() == 0 &&
+                ally.getPriorityAttack() == 0) {
+                ally.setPriority(AllyAction.FOLLOW, 75);
+            }
+
+            MemoryAPI mem = fleet.getMemoryWithoutUpdate();
+            if (mem.getBoolean(KEY_RETURNING_HOME)) continue;
+
+            // Determine if we should be following
+            boolean shouldFollow = ally.getPriorityFollow() > 0 &&
+                ally.getHighestPriorityAction() == AllyAction.FOLLOW;
+
+            if (shouldFollow && fleet.getBattle() == null) {
+                LocationAPI playerLoc = playerFleet.getContainingLocation();
+                LocationAPI myLoc = fleet.getContainingLocation();
+
+                // Same system: override movement to close distance
+                if (myLoc == playerLoc) {
+                    float dist = Misc.getDistance(fleet.getLocation(), playerFleet.getLocation());
+                    if (dist > FOLLOW_CLOSE_DIST) {
+                        fleet.setMoveDestinationOverride(
+                            playerFleet.getLocation().x, playerFleet.getLocation().y);
+                    }
+                    if (dist > FOLLOW_REISSUE_DIST) {
+                        giveFollowAssignment(fleet, playerFleet);
+                    }
+                }
             }
 
             if (shouldResupply) AllyFleetController.resupplyFleet(ally);
@@ -87,26 +100,10 @@ public class AllyFleetAI implements EveryFrameScript {
         }
     }
 
-    /** Per-frame: steer towards a point behind the player so we form up smoothly */
-    private void smoothFollow(CampaignFleetAPI fleet, CampaignFleetAPI player) {
-        if (fleet.getContainingLocation() != player.getContainingLocation()) return;
-
-        Vector2f playerPos = player.getLocation();
-        Vector2f myPos = fleet.getLocation();
-        float dist = Misc.getDistance(myPos, playerPos);
-
-        if (dist > FOLLOW_CLOSE_DIST) {
-            // Move towards player
-            Vector2f diff = new Vector2f(playerPos.x - myPos.x, playerPos.y - myPos.y);
-            float len = diff.length();
-            diff.scale(1f / len); // normalize
-            fleet.setMoveDestinationOverride(
-                    myPos.x + diff.x * (dist - 200f),
-                    myPos.y + diff.y * (dist - 200f));
-        }
+    private void giveFollowAssignment(CampaignFleetAPI fleet, CampaignFleetAPI target) {
+        fleet.clearAssignments();
+        fleet.addAssignment(FleetAssignment.FOLLOW, target, 1000000f, "following you");
     }
-
-    // ── Decision logic ──────────────────────────────────────────────
 
     private void decideAction(AllyFleet ally, CampaignFleetAPI fleet, CampaignFleetAPI playerFleet) {
         MemoryAPI mem = fleet.getMemoryWithoutUpdate();
@@ -114,28 +111,24 @@ public class AllyFleetAI implements EveryFrameScript {
 
         List<WeightedAction> actions = new ArrayList<>();
 
-        if (ally.getPriorityFollow() > 0) {
+        if (ally.getPriorityFollow() > 0)
             actions.add(new WeightedAction(AllyAction.FOLLOW, ally.getPriorityFollow(), playerFleet));
-        }
         if (ally.getPriorityDefend() > 0) {
-            MarketAPI threat = findMostThreatenedPlayerColony();
-            if (threat != null)
-                actions.add(new WeightedAction(AllyAction.DEFEND, ally.getPriorityDefend() * 1.5f, threat.getPrimaryEntity()));
+            MarketAPI t = findMostThreatenedPlayerColony();
+            if (t != null) actions.add(new WeightedAction(AllyAction.DEFEND, ally.getPriorityDefend() * 1.5f, t.getPrimaryEntity()));
         }
         if (ally.getPriorityPatrol() > 0) {
-            MarketAPI home = ally.getHomeMarket();
-            if (home != null && home.getStarSystem() != null)
-                actions.add(new WeightedAction(AllyAction.PATROL, ally.getPriorityPatrol(), home.getStarSystem().getCenter()));
+            MarketAPI h = ally.getHomeMarket();
+            if (h != null && h.getStarSystem() != null)
+                actions.add(new WeightedAction(AllyAction.PATROL, ally.getPriorityPatrol(), h.getStarSystem().getCenter()));
         }
         if (ally.getPriorityAttack() > 0) {
-            CampaignFleetAPI target = findNearestEnemyFleet(fleet, ally);
-            if (target != null)
-                actions.add(new WeightedAction(AllyAction.ATTACK, ally.getPriorityAttack(), target));
+            CampaignFleetAPI t = findNearestEnemyFleet(fleet, ally);
+            if (t != null) actions.add(new WeightedAction(AllyAction.ATTACK, ally.getPriorityAttack(), t));
         }
         if (ally.getPriorityTrade() > 0) {
-            MarketAPI target = findBestTradeMarket(ally);
-            if (target != null)
-                actions.add(new WeightedAction(AllyAction.TRADE, ally.getPriorityTrade(), target.getPrimaryEntity()));
+            MarketAPI t = findBestTradeMarket(ally);
+            if (t != null) actions.add(new WeightedAction(AllyAction.TRADE, ally.getPriorityTrade(), t.getPrimaryEntity()));
         }
 
         if (actions.isEmpty()) {
@@ -149,21 +142,15 @@ public class AllyFleetAI implements EveryFrameScript {
         mem.set(KEY_LAST_ACTION, best.action.name());
 
         switch (best.action) {
-            case FOLLOW:
-                giveFollowAssignment(fleet, playerFleet);
-                break;
+            case FOLLOW: giveFollowAssignment(fleet, playerFleet); break;
             case DEFEND:
-                if (best.target != null) {
-                    fleet.clearAssignments();
-                    fleet.addAssignment(FleetAssignment.DEFEND_LOCATION, best.target, 7f, "defending");
-                    fleet.addAssignment(FleetAssignment.ORBIT_AGGRESSIVE, best.target, 3f, "orbiting");
-                }
+                fleet.clearAssignments();
+                fleet.addAssignment(FleetAssignment.DEFEND_LOCATION, best.target, 7f, "defending");
+                fleet.addAssignment(FleetAssignment.ORBIT_AGGRESSIVE, best.target, 3f, "orbiting");
                 break;
             case PATROL:
-                if (best.target != null) {
-                    fleet.clearAssignments();
-                    fleet.addAssignment(FleetAssignment.PATROL_SYSTEM, best.target, 10f, "patrolling");
-                }
+                fleet.clearAssignments();
+                fleet.addAssignment(FleetAssignment.PATROL_SYSTEM, best.target, 10f, "patrolling");
                 break;
             case ATTACK:
                 if (best.target instanceof CampaignFleetAPI) {
@@ -173,58 +160,42 @@ public class AllyFleetAI implements EveryFrameScript {
                 }
                 break;
             case TRADE:
-                if (best.target != null) {
-                    fleet.clearAssignments();
-                    fleet.addAssignment(FleetAssignment.GO_TO_LOCATION, best.target, 1000f, "traveling");
-                    fleet.addAssignment(FleetAssignment.ORBIT_PASSIVE, best.target, 2f, "trading");
-                }
+                fleet.clearAssignments();
+                fleet.addAssignment(FleetAssignment.GO_TO_LOCATION, best.target, 1000f, "traveling");
+                fleet.addAssignment(FleetAssignment.ORBIT_PASSIVE, best.target, 2f, "trading");
                 break;
         }
     }
 
-    private void giveFollowAssignment(CampaignFleetAPI fleet, CampaignFleetAPI playerFleet) {
-        fleet.clearAssignments();
-        fleet.addAssignment(FleetAssignment.FOLLOW, playerFleet, 1000000f, "following you");
-    }
-
     private MarketAPI findMostThreatenedPlayerColony() {
-        List<MarketAPI> markets = Misc.getPlayerMarkets(true);
-        MarketAPI worst = null;
-        float ws = Float.MAX_VALUE;
-        for (MarketAPI m : markets) {
-            if (!m.isHidden()) {
-                float s = m.getStabilityValue();
-                if (s < ws) { ws = s; worst = m; }
-            }
-        }
+        MarketAPI worst = null; float ws = Float.MAX_VALUE;
+        for (MarketAPI m : Misc.getPlayerMarkets(true))
+            if (!m.isHidden() && m.getStabilityValue() < ws) { ws = m.getStabilityValue(); worst = m; }
         return worst;
     }
 
-    private CampaignFleetAPI findNearestEnemyFleet(CampaignFleetAPI fleet, AllyFleet ally) {
-        FactionAPI faction = ally.getFaction();
-        if (faction == null) return null;
-        List<CampaignFleetAPI> nearby = Misc.getNearbyFleets(fleet, 2000);
-        CampaignFleetAPI best = null;
+    private CampaignFleetAPI findNearestEnemyFleet(CampaignFleetAPI f, AllyFleet ally) {
+        FactionAPI fac = ally.getFaction();
+        if (fac == null) return null;
         float bd = Float.MAX_VALUE;
-        for (CampaignFleetAPI other : nearby) {
-            if (other.isPlayerFleet() || other.getFaction() == null) continue;
-            if (!faction.isHostileTo(other.getFaction())) continue;
-            if (other.getFleetPoints() > fleet.getFleetPoints() * 1.5f) continue;
-            float d = Misc.getDistance(fleet.getLocation(), other.getLocation());
-            if (d < bd) { bd = d; best = other; }
+        CampaignFleetAPI best = null;
+        for (CampaignFleetAPI o : Misc.getNearbyFleets(f, 2000)) {
+            if (o.isPlayerFleet() || o.getFaction() == null || !fac.isHostileTo(o.getFaction())) continue;
+            if (o.getFleetPoints() > f.getFleetPoints() * 1.5f) continue;
+            float d = Misc.getDistance(f.getLocation(), o.getLocation());
+            if (d < bd) { bd = d; best = o; }
         }
         return best;
     }
 
     private MarketAPI findBestTradeMarket(AllyFleet ally) {
-        CampaignFleetAPI fleet = ally.getFleet();
-        if (fleet == null) return null;
+        CampaignFleetAPI f = ally.getFleet();
+        if (f == null) return null;
         float bd = Float.MAX_VALUE;
         MarketAPI best = null;
         for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
-            if (m.isHidden() || !m.hasSpaceport()) continue;
-            if (m.getFaction().isHostileTo(ally.getFaction())) continue;
-            float d = Misc.getDistance(fleet.getLocationInHyperspace(), m.getLocationInHyperspace());
+            if (m.isHidden() || !m.hasSpaceport() || m.getFaction().isHostileTo(ally.getFaction())) continue;
+            float d = Misc.getDistance(f.getLocationInHyperspace(), m.getLocationInHyperspace());
             if (d < bd) { bd = d; best = m; }
         }
         return best;
