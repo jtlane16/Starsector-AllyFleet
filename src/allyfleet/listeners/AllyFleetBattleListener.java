@@ -4,6 +4,7 @@ import allyfleet.AllyFleet;
 import allyfleet.controllers.AllyFleetController;
 import com.fs.starfarer.api.campaign.BattleAPI;
 import com.fs.starfarer.api.campaign.CampaignEventListener;
+import com.fs.starfarer.api.campaign.CampaignEventListener.FleetDespawnReason;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.campaign.listeners.FleetEventListener;
 import com.fs.starfarer.api.util.Misc;
