@@ -113,7 +113,7 @@ public class AllyTradeAI {
             float spendable = Math.max(0, credits - RESERVE_CREDITS);
             AILog.logTrade("  buy-check: space=" + (int)available + " spendable=" + (int)spendable
                     + " at " + currentMarket.getName());
-            if (available > 10 && spendable > 1000) {
+            if (available > 0 && spendable > 1000) {
                 for (String good : TRADE_GOODS) {
                     CommodityOnMarketAPI com = currentMarket.getCommodityData(good);
                     float buyPrice = getBuyPrice(com);
@@ -154,21 +154,36 @@ public class AllyTradeAI {
         // ── 4. No trade to do — go to a nearby market to look ────
         if (credits > RESERVE_CREDITS + 10000) {
             AILog.logTrade("  seeking market... space=" + (int)cargo.getSpaceLeft() + " credits=" + (int)credits);
-            MarketAPI target = findBestBuyMarket(fleet);
+            MarketAPI target = findBestBuyMarket(fleet, currentMarket);
             if (target != null && target != currentMarket) {
                 AILog.logTrade("  seeking trade at " + target.getName()
                         + " (dist=" + (int) Misc.getDistance(fleet.getLocationInHyperspace(), target.getLocationInHyperspace()) + ")");
                 goToMarket(fleet, target, "seeking trade goods");
-            } else if (target == null) {
-                AILog.logTrade("  no buy-market found — trying nearest friendly market instead");
-                target = findNearestFriendlyMarket(fleet);
-                if (target != null && target != currentMarket) {
+            } else if (target == null || target == currentMarket) {
+                AILog.logTrade("  no buy-market found — trying any other friendly market");
+                target = findNearestFriendlyMarket(fleet, currentMarket);
+                if (target != null) {
+                    AILog.logTrade("  going to " + target.getName() + " (dist="
+                            + (int) Misc.getDistance(fleet.getLocationInHyperspace(), target.getLocationInHyperspace()) + ")");
                     goToMarket(fleet, target, "visiting market");
                 } else {
-                    AILog.logTrade("  no friendly market reachable");
+                    AILog.logTrade("  no friendly market reachable — brute-forcing ANY non-hostile market");
+                    for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
+                        if (m.isHidden() || !m.hasSpaceport()) continue;
+                        if (m == currentMarket) continue;
+                        if (m.getFaction().isHostileTo(fleet.getFaction())) {
+                            AILog.logTrade("    hostile: " + m.getName() + " (" + m.getFaction().getDisplayName() + ")");
+                            continue;
+                        }
+                        AILog.logTrade("  brute-force going to " + m.getName());
+                        goToMarket(fleet, m, "visiting market");
+                        target = m;
+                        break;
+                    }
+                    if (target == null) {
+                        AILog.logTrade("  NO FRIENDLY MARKET EXISTS ANYWHERE");
+                    }
                 }
-            } else {
-                AILog.logTrade("  best buy-market is current market — waiting");
             }
         } else {
             AILog.logTrade("  no travel: credits=" + (int)credits + " below reserve threshold");
@@ -283,7 +298,7 @@ public class AllyTradeAI {
     private static MarketAPI findCurrentMarket(CampaignFleetAPI fleet) {
         if (fleet.getContainingLocation() == null) return null;
         MarketAPI nearest = null;
-        float bestDist = 150f;
+        float bestDist = 400f;
         for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
             if (m.isHidden() || !m.hasSpaceport()) continue;
             // Must be in the same location (same star system or hyperspace)
@@ -295,13 +310,14 @@ public class AllyTradeAI {
         return nearest;
     }
 
-    /** Find the nearest friendly/neutral market with a spaceport */
-    private static MarketAPI findNearestFriendlyMarket(CampaignFleetAPI fleet) {
+    /** Find the nearest friendly/neutral market with a spaceport, optionally skipping one */
+    private static MarketAPI findNearestFriendlyMarket(CampaignFleetAPI fleet, MarketAPI skipMarket) {
         MarketAPI best = null;
         float bestDist = Float.MAX_VALUE;
         int total = 0, hidden = 0, noPort = 0, hostile = 0;
         for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
             total++;
+            if (m == skipMarket) continue;
             if (m.isHidden()) { hidden++; continue; }
             if (!m.hasSpaceport()) { noPort++; continue; }
             if (m.getFaction().isHostileTo(fleet.getFaction())) { hostile++; continue; }
@@ -329,12 +345,13 @@ public class AllyTradeAI {
     }
 
     /** Find the best market to BUY goods (has surplus of something we can carry) */
-    private static MarketAPI findBestBuyMarket(CampaignFleetAPI fleet) {
+    private static MarketAPI findBestBuyMarket(CampaignFleetAPI fleet, MarketAPI skipMarket) {
         MarketAPI best = null;
-        float bestScore = 0;
+        float bestScore = -999999;
         float spendable = 100000;
         for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
             if (m.isHidden() || !m.hasSpaceport()) continue;
+            if (m == skipMarket) continue;
             if (m.getFaction().isHostileTo(fleet.getFaction())) continue;
             float score = 0;
             for (String good : TRADE_GOODS) {
@@ -343,12 +360,13 @@ public class AllyTradeAI {
                 int maxBuy = (int)(spendable / Math.max(1, buyPrice));
                 if (maxBuy <= 0) continue;
                 MarketAPI sellTo = findBestSellMarket(good, maxBuy, fleet);
-                if (sellTo == null || sellTo == m) continue;
+                if (sellTo == null || sellTo == m || sellTo == skipMarket) continue;
                 float sellPrice = getSellPrice(sellTo.getCommodityData(good));
                 float margin = (sellPrice - buyPrice) * maxBuy;
                 if (margin > 0) score += margin;
             }
-            float distPenalty = Misc.getDistance(fleet.getLocationInHyperspace(), m.getLocationInHyperspace()) / 500f;
+            // Prefer markets with profit, slightly bias closer ones
+            float distPenalty = Misc.getDistance(fleet.getLocationInHyperspace(), m.getLocationInHyperspace()) / 100f;
             score -= distPenalty;
             if (score > bestScore) { bestScore = score; best = m; }
         }

@@ -25,8 +25,8 @@ public class AllyFleetSupplyManager {
     /** Thresholds as fraction of 30-day supply need */
     private static final float CRITICAL_THRESHOLD = 0.10f;
     private static final float LOW_THRESHOLD = 0.25f;
-    private static final float RESUPPLY_TARGET = 0.60f;
-    private static final float RESTORE_THRESHOLD = 0.50f;
+    private static final float RESUPPLY_TARGET = 0.40f;
+    private static final float RESTORE_THRESHOLD = 0.35f;
 
     /** Days of supply to use as baseline for target stock */
     private static final int DAYS_TARGET = 30;
