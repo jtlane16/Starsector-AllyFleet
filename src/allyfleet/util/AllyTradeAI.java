@@ -303,12 +303,18 @@ public class AllyTradeAI {
     private static MarketAPI findNearestFriendlyMarket(CampaignFleetAPI fleet) {
         MarketAPI best = null;
         float bestDist = Float.MAX_VALUE;
+        int total = 0, hidden = 0, noPort = 0, hostile = 0;
         for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
-            if (m.isHidden() || !m.hasSpaceport()) continue;
-            if (m.getFaction().isHostileTo(fleet.getFaction())) continue;
+            total++;
+            if (m.isHidden()) { hidden++; continue; }
+            if (!m.hasSpaceport()) { noPort++; continue; }
+            if (m.getFaction().isHostileTo(fleet.getFaction())) { hostile++; continue; }
             float dist = Misc.getDistance(fleet.getLocationInHyperspace(), m.getLocationInHyperspace());
             if (dist < bestDist) { bestDist = dist; best = m; }
         }
+        AILog.logTrade("  nearestMarket: total=" + total + " hidden=" + hidden
+                + " noPort=" + noPort + " hostile=" + hostile
+                + " fleetFaction=" + (fleet.getFaction() != null ? fleet.getFaction().getDisplayName() : "NULL"));
         return best;
     }
 

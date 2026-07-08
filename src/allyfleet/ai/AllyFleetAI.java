@@ -27,7 +27,7 @@ public class AllyFleetAI implements EveryFrameScript {
 
     private IntervalUtil timer = new IntervalUtil(UPDATE_INTERVAL_DAYS * 0.75f, UPDATE_INTERVAL_DAYS * 1.25f);
     private IntervalUtil respawnTimer = new IntervalUtil(RESP_DELAY, RESP_DELAY);
-    private IntervalUtil tradeTimer = new IntervalUtil(5f, 8f);
+    private IntervalUtil tradeTimer = new IntervalUtil(0.5f, 1.5f);
 
     public static final String KEY_ACTION = "$ally_action";
     public static final String KEY_RETURNING = "$ally_returningHome";
