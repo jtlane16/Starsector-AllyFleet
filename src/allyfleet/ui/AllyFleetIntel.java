@@ -56,7 +56,7 @@ public class AllyFleetIntel extends BaseIntelPlugin {
     }
 
     @Override
-    public SectorEntityToken getIntelLocation(SectorMapAPI map) {
+    public SectorEntityToken getMapLocation(SectorMapAPI map) {
         CampaignFleetAPI fleet = getFleet();
         return fleet;
     }
