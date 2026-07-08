@@ -12,7 +12,6 @@ import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.ui.Fonts;
 import com.fs.starfarer.api.ui.LabelAPI;
 import com.fs.starfarer.api.util.Misc;
-import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
 import java.awt.Color;
@@ -20,26 +19,28 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Campaign map overlay widget — shows ally fleet status + clickable priorities.
+ * Compact campaign-map widget — shows your ally fleet and lets you set its current objective.
+ * Only one ally fleet exists at a time.
  *
- * Renders a small semi-transparent panel in the top-left of the screen.
- * Click a priority number to cycle: 0 -> 25 -> 50 -> 75 -> 100 -> 0.
- * Click the fleet name to cycle through multiple fleets.
+ * Layout (top-right corner):
+ *   [Fleet Name]
+ *   Objective: FOLLOW  <- click to cycle
+ *   Status: Active
  */
 public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, CampaignInputListener, EveryFrameScript {
 
-    // ── Layout ────────────────────────────────────────────────────
-    private static final float PANEL_X = 10f,  PANEL_Y = 80f;
-    private static final float PANEL_W = 230f, PANEL_H = 200f;
+    // ── Layout constants ───────────────────────────────────────────
+    private static final float PAD = 6f;
     private static final float LINE_H = 18f;
-    private static final float PAD   = 5f;
-    private static final int[] LEVELS = {0, 25, 50, 75, 100};
+    private static final float PANEL_W = 200f;
+    private static final float TOP_MARGIN = 40f;   // below top bar
+    private static final float RIGHT_MARGIN = 10f;
 
-    private int selectedIdx = 0;
-    private boolean done = false;
+    // Computed each frame from screen size
+    private float panelX, panelY, panelH;
 
-    // Cached LabelAPI objects rebuilt every frame
     private final List<LabelEntry> entries = new ArrayList<>();
+    private boolean done = false;
 
     private static class LabelEntry {
         LabelAPI label;
@@ -47,50 +48,41 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Camp
         Runnable click;
     }
 
-    // ── EveryFrameScript ─────────────────────────────────────────
+    // ── EveryFrameScript ──────────────────────────────────────────
 
     @Override public boolean isDone() { return done; }
     @Override public boolean runWhilePaused() { return false; }
 
     @Override
     public void advance(float amount) {
-        // Rebuild labels every frame using the fast-mutating API
         entries.clear();
-        int count = AllyFleetController.getFleetCount();
-        if (count == 0) return;
-        if (selectedIdx >= count) selectedIdx = 0;
-
-        AllyFleet fleet = new ArrayList<>(AllyFleetController.getFleets()).get(selectedIdx);
+        AllyFleet fleet = getFleet();
         if (fleet == null) return;
 
-        float y = PANEL_Y + PAD;
-        String font = Fonts.ORBITRON_12;
+        // Position: top-right, computed from viewport
+        float screenW = Global.getSector().getViewport().getVisibleWidth();
+        panelX = screenW - PANEL_W - RIGHT_MARGIN;
+        panelY = Global.getSector().getViewport().getVisibleHeight() - TOP_MARGIN;
+        panelH = LINE_H * 3 + PAD * 4;
 
-        // ── Header: fleet name (clickable) ──
-        addEntry(fleet.getFleetName(), font, PANEL_X + PAD, y += LINE_H, PANEL_W - 2*PAD, LINE_H,
-                Misc.getBasePlayerColor(), this::cycleFleet);
+        String font = Fonts.ORBITRON_12;
+        float y = panelY; // top of panel
+
+        // ── Header ──
+        addEntry(fleet.getFleetName(), font, panelX + PAD, y - LINE_H, PANEL_W - 2*PAD, LINE_H,
+                Misc.getBasePlayerColor(), null);
+
+        // ── Objective (clickable cycle) ──
+        AllyAction current = fleet.getHighestPriorityAction();
+        if (current == null) { current = AllyAction.FOLLOW; fleet.setPriority(AllyAction.FOLLOW, 75); }
+        String objText = "Objective: " + current.getDisplayName();
+        addEntry(objText, font, panelX + PAD, y - LINE_H * 2, PANEL_W - 2*PAD, LINE_H,
+                Color.CYAN, () -> cycleObjective(fleet));
 
         // ── Status ──
         String st = fleet.isAlive() ? "Active" : "Respawning";
-        addEntry("Status: " + st, font, PANEL_X + PAD, y += LINE_H, PANEL_W - 2*PAD, LINE_H,
+        addEntry("Status: " + st, font, panelX + PAD, y - LINE_H * 3, PANEL_W - 2*PAD, LINE_H,
                 fleet.isAlive() ? Color.GREEN : Color.RED, null);
-
-        // ── Credits ──
-        addEntry("$" + Misc.getFormat().format(fleet.getCredits()), font,
-                PANEL_X + PAD, y += LINE_H, PANEL_W - 2*PAD, LINE_H,
-                Color.ORANGE, null);
-
-        y += 4f; // spacer
-
-        // ── Priority rows ──
-        for (AllyAction a : AllyAction.values()) {
-            int p = fleet.getPriority(a);
-            Color c = p >= 75 ? Color.CYAN : p >= 25 ? Color.WHITE : Color.GRAY;
-            AllyAction cap = a;
-            addEntry(a.getDisplayName() + ": " + p, font,
-                    PANEL_X + PAD, y += LINE_H, PANEL_W - 2*PAD, LINE_H, c,
-                    () -> { cyclePrio(fleet, cap); });
-        }
     }
 
     private void addEntry(String text, String font, float x, float y, float w, float h,
@@ -99,63 +91,76 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Camp
         label.setColor(color);
         label.getPosition().setLocation(x, y);
         label.getPosition().setSize(w, h);
-
         LabelEntry e = new LabelEntry();
         e.label = label; e.x = x; e.y = y; e.w = w; e.h = h; e.click = onClick;
         entries.add(e);
     }
 
-    private void cyclePrio(AllyFleet fleet, AllyAction action) {
+    private void cycleObjective(AllyFleet fleet) {
         if (fleet == null) return;
-        int cur = fleet.getPriority(action);
-        int nxt = 0;
-        for (int i = 0; i < LEVELS.length - 1; i++)
-            if (cur == LEVELS[i]) { nxt = LEVELS[i + 1]; break; }
-        fleet.setPriority(action, nxt);
+        AllyAction[] all = AllyAction.values();
+
+        // Find current active objective
+        AllyAction current = null;
+        for (AllyAction a : all) {
+            if (fleet.getPriority(a) > 0) { current = a; break; }
+        }
+
+        // Set all to 0, then set next one to 75
+        for (AllyAction a : all) fleet.setPriority(a, 0);
+
+        AllyAction next = all[0];
+        if (current != null) {
+            int idx = java.util.Arrays.asList(all).indexOf(current);
+            next = all[(idx + 1) % all.length];
+        }
+        fleet.setPriority(next, 75);
         Global.getSector().getCampaignUI().addMessage(
-            fleet.getFleetName() + ": " + action.getDisplayName() + " > " + nxt,
-            Misc.getHighlightColor());
+                fleet.getFleetName() + " -> " + next.getDisplayName(),
+                Misc.getHighlightColor());
     }
 
-    private void cycleFleet() {
-        int n = AllyFleetController.getFleetCount();
-        if (n > 0) selectedIdx = (selectedIdx + 1) % n;
+    private AllyFleet getFleet() {
+        List<AllyFleet> list = new ArrayList<>(AllyFleetController.getFleets());
+        return list.isEmpty() ? null : list.get(0);
     }
 
-    // ── CampaignUIRenderingListener ─────────────────────────────
+    // ── CampaignUIRenderingListener ───────────────────────────────
 
     @Override public void renderInUICoordsBelowUI(ViewportAPI vp) {}
 
     @Override
     public void renderInUICoordsAboveUIBelowTooltips(ViewportAPI vp) {
-        if (entries.isEmpty()) return;
+        AllyFleet fleet = getFleet();
+        if (fleet == null || entries.isEmpty()) return;
 
         float alpha = vp.getAlphaMult();
 
-        // ── Background ──
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+
+        // Background
         GL11.glColor4f(0.08f, 0.08f, 0.12f, 0.70f * alpha);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glBegin(GL11.GL_QUADS);
-        GL11.glVertex2f(PANEL_X, PANEL_Y);
-        GL11.glVertex2f(PANEL_X + PANEL_W, PANEL_Y);
-        GL11.glVertex2f(PANEL_X + PANEL_W, PANEL_Y + PANEL_H);
-        GL11.glVertex2f(PANEL_X, PANEL_Y + PANEL_H);
+        GL11.glVertex2f(panelX, panelY - panelH);
+        GL11.glVertex2f(panelX + PANEL_W, panelY - panelH);
+        GL11.glVertex2f(panelX + PANEL_W, panelY);
+        GL11.glVertex2f(panelX, panelY);
         GL11.glEnd();
 
-        // ── Border ──
+        // Border
         GL11.glColor4f(0.3f, 0.5f, 1.0f, 0.5f * alpha);
         GL11.glBegin(GL11.GL_LINE_LOOP);
-        GL11.glVertex2f(PANEL_X, PANEL_Y);
-        GL11.glVertex2f(PANEL_X + PANEL_W, PANEL_Y);
-        GL11.glVertex2f(PANEL_X + PANEL_W, PANEL_Y + PANEL_H);
-        GL11.glVertex2f(PANEL_X, PANEL_Y + PANEL_H);
+        GL11.glVertex2f(panelX, panelY - panelH);
+        GL11.glVertex2f(panelX + PANEL_W, panelY - panelH);
+        GL11.glVertex2f(panelX + PANEL_W, panelY);
+        GL11.glVertex2f(panelX, panelY);
         GL11.glEnd();
 
-        // ── Button rects ──
+        // Clickable row highlight
         for (LabelEntry e : entries) {
             if (e.click != null) {
-                GL11.glColor4f(0.18f, 0.25f, 0.40f, 0.40f * alpha);
+                GL11.glColor4f(0.18f, 0.25f, 0.40f, 0.35f * alpha);
                 GL11.glBegin(GL11.GL_QUADS);
                 GL11.glVertex2f(e.x, e.y - e.h);
                 GL11.glVertex2f(e.x + e.w, e.y - e.h);
@@ -167,7 +172,7 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Camp
 
         GL11.glPopAttrib();
 
-        // ── Labels ──
+        // Labels
         for (LabelEntry e : entries) {
             e.label.render(alpha);
         }
@@ -175,7 +180,7 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Camp
 
     @Override public void renderInUICoordsAboveUIAndTooltips(ViewportAPI vp) {}
 
-    // ── CampaignInputListener ────────────────────────────────────
+    // ── CampaignInputListener ─────────────────────────────────────
 
     @Override public int getListenerInputPriority() { return 5; }
     @Override public void processCampaignInputPreCore(List<InputEventAPI> events) {}
@@ -184,13 +189,11 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Camp
     @Override
     public void processCampaignInputPostCore(List<InputEventAPI> events) {
         if (entries.isEmpty()) return;
-        float screenH = Global.getSector().getViewport().getVisibleHeight();
-
         for (InputEventAPI ev : events) {
             if (ev.isConsumed()) continue;
             if (ev.isMouseDownEvent()) {
                 float mx = ev.getX();
-                float my = screenH - ev.getY();
+                float my = ev.getY(); // OpenGL Y: 0 at bottom
                 for (LabelEntry e : entries) {
                     if (e.click != null && mx >= e.x && mx <= e.x + e.w
                         && my >= e.y - e.h && my <= e.y) {

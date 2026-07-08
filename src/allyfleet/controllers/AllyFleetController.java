@@ -28,6 +28,7 @@ public class AllyFleetController {
 
     /**
      * Create a new ally fleet at the specified market.
+     * Only one ally fleet is allowed at a time — replaces any existing fleet.
      *
      * @param name      The fleet's display name
      * @param market    The market where the fleet is created
@@ -37,6 +38,11 @@ public class AllyFleetController {
     public static AllyFleet createFleet(String name, MarketAPI market, String factionId) {
         if (market == null) return null;
         if (factionId == null) factionId = Global.getSector().getPlayerFaction().getId();
+
+        // Remove existing fleet if any (only one allowed)
+        for (AllyFleet existing : new ArrayList<>(fleets.values())) {
+            removeFleet(existing);
+        }
 
         // Generate a unique ID
         String id = Global.getSector().genUID();
