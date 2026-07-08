@@ -51,6 +51,9 @@ public class AllyTradeAI {
         CargoAPI cargo = fleet.getCargo();
         float credits = ally.getCredits();
 
+        // Trade mode: avoid combat
+        fleet.setNoEngaging(60f * 60f * 24f * 5f); // 5 days passive
+
         // ── 0. Log tick start ─────────────────────────────────────
         MarketAPI currentMarket = findCurrentMarket(fleet);
         AILog.logTrade("Tick — credits=$" + (int)credits
@@ -376,14 +379,14 @@ public class AllyTradeAI {
     /** Send the fleet to a market — skips if already assigned there */
     private static void goToMarket(CampaignFleetAPI fleet, MarketAPI market, String action) {
         if (market.getPrimaryEntity() == null) return;
-        // Don't clear assignments if already heading to this market
-        for (com.fs.starfarer.api.campaign.FleetAssignment assignment : fleet.getCurrentAssignments()) {
-            if (assignment.getTarget() == market.getPrimaryEntity()) {
-                return; // already going there
-            }
+        String memKey = "$ally_trade_target";
+        String currentTarget = fleet.getMemoryWithoutUpdate().getString(memKey);
+        if (currentTarget != null && currentTarget.equals(market.getName())) {
+            return; // already heading there
         }
         fleet.clearAssignments();
         fleet.addAssignment(FleetAssignment.GO_TO_LOCATION, market.getPrimaryEntity(), 1000f, action);
         fleet.addAssignment(FleetAssignment.ORBIT_PASSIVE, market.getPrimaryEntity(), 3f, "trading at " + market.getName());
+        fleet.getMemoryWithoutUpdate().set(memKey, market.getName());
     }
 }

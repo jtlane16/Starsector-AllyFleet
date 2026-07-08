@@ -3,9 +3,11 @@ package allyfleet.ui;
 import allyfleet.AllyAction;
 import allyfleet.AllyFleet;
 import allyfleet.controllers.AllyFleetController;
+import allyfleet.ui.AllyFleetIntel;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
+import com.fs.starfarer.api.campaign.CampaignUIAPI.CampaignUITabs;
 import com.fs.starfarer.api.campaign.listeners.CampaignUIRenderingListener;
 import com.fs.starfarer.api.combat.ViewportAPI;
 import com.fs.starfarer.api.ui.Fonts;
@@ -21,7 +23,7 @@ import java.util.List;
 
 public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, EveryFrameScript {
 
-    private static final float PAD = 6f, LINE_H = 18f, PANEL_W = 200f, PANEL_H = 160f;
+    private static final float PAD = 6f, LINE_H = 18f, PANEL_W = 200f, PANEL_H = 178f;
     private static final float TOP_OFFSET = 40f, RIGHT_OFFSET = 10f;
     private float panelX, panelY;
     private final List<LabelEntry> entries = new ArrayList<>();
@@ -81,6 +83,17 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Ever
         String st = fleet.isAlive() ? "Active" : "Respawning";
         addEntry("Status: " + st, font, panelX + PAD, y - LINE_H * 7, PANEL_W - 2*PAD, LINE_H,
                 fleet.isAlive() ? Color.GREEN : Color.RED, null);
+
+        // Row 8: Locate / Track
+        addEntry("[ Locate Fleet ]", font, panelX + PAD, y - LINE_H * 8, PANEL_W - 2*PAD, LINE_H,
+                new Color(100, 200, 255), () -> {
+                    // Register intel entry so it appears in Intel tab
+                    if (Global.getSector().getIntelManager().getIntel(AllyFleetIntel.class).isEmpty()) {
+                        Global.getSector().getIntelManager().addIntel(new AllyFleetIntel(), false);
+                    }
+                    // Open intel tab
+                    Global.getSector().getCampaignUI().setCurrentTab(CampaignUITabs.INTEL);
+                });
 
         // Mouse polling
         boolean down = Mouse.isButtonDown(0);
