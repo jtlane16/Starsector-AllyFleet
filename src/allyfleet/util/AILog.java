@@ -24,8 +24,7 @@ public class AILog {
             writer = new PrintWriter(new FileWriter(LOG_PATH, false));
             writer.println("=== Ally Fleet AI Log ===");
             writer.println("Started: " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
-            writer.println("Game cycle: " + Global.getSector().getClock().getCycle()
-                    + " day " + (int)Global.getSector().getClock().getDay());
+            writer.println("(game time logged on first message)");
             writer.println();
         } catch (IOException e) {
             enabled = false;
