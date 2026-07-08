@@ -23,7 +23,7 @@ public class AllyTradeAI {
 
     // Commodities worth trading — bulk goods with stable demand
     private static final String[] TRADE_GOODS = {
-            "supplies", "fuel", "food", "domestic_goods",
+            "food", "domestic_goods",
             "ore", "metals", "rare_ore", "rare_metals",
             "organics", "volatiles",
             "heavy_machinery"

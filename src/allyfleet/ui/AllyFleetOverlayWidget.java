@@ -5,6 +5,7 @@ import allyfleet.AllyFleet;
 import allyfleet.controllers.AllyFleetController;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.campaign.listeners.CampaignUIRenderingListener;
 import com.fs.starfarer.api.combat.ViewportAPI;
 import com.fs.starfarer.api.ui.Fonts;
@@ -20,7 +21,7 @@ import java.util.List;
 
 public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, EveryFrameScript {
 
-    private static final float PAD = 6f, LINE_H = 18f, PANEL_W = 200f, PANEL_H = 95f;
+    private static final float PAD = 6f, LINE_H = 18f, PANEL_W = 200f, PANEL_H = 160f;
     private static final float TOP_OFFSET = 40f, RIGHT_OFFSET = 10f;
     private float panelX, panelY;
     private final List<LabelEntry> entries = new ArrayList<>();
@@ -43,23 +44,42 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Ever
         float sh = Global.getSettings().getScreenHeight();
         panelX = sw - PANEL_W - RIGHT_OFFSET;
         panelY = sh - TOP_OFFSET;
-
+        CampaignFleetAPI cf = fleet.getFleet();
         String font = Fonts.ORBITRON_12;
         float y = panelY;
 
+        // Row 1: Fleet name
         addEntry(fleet.getFleetName(), font, panelX + PAD, y - LINE_H, PANEL_W - 2*PAD, LINE_H,
                 Misc.getBasePlayerColor(), null);
 
+        // Row 2: Objective
         AllyAction current = currentObjective(fleet);
         addEntry("Objective: " + current.getDisplayName(), font,
                 panelX + PAD, y - LINE_H * 2, PANEL_W - 2*PAD, LINE_H, Color.CYAN, null);
 
+        // Row 3: Change objective button
         addEntry("> Change Objective <", font,
                 panelX + PAD, y - LINE_H * 3, PANEL_W - 2*PAD, LINE_H,
                 Color.ORANGE, () -> cycleObjective(fleet));
 
+        // Row 4: Credits
+        addEntry("$" + Misc.getFormat().format(fleet.getCredits()), font,
+                panelX + PAD, y - LINE_H * 4, PANEL_W - 2*PAD, LINE_H, Color.YELLOW, null);
+
+        // Row 5: Supplies (current / daily use)
+        String supStr = "Supplies: " + (int)(cf != null ? cf.getCargo().getSupplies() : 0);
+        if (cf != null) supStr += " (-" + (int)cf.getTotalSupplyCostPerDay() + "/d)";
+        addEntry(supStr, font, panelX + PAD, y - LINE_H * 5, PANEL_W - 2*PAD, LINE_H,
+                Color.WHITE, null);
+
+        // Row 6: Fuel
+        String fuelStr = "Fuel: " + (int)(cf != null ? cf.getCargo().getFuel() : 0);
+        addEntry(fuelStr, font, panelX + PAD, y - LINE_H * 6, PANEL_W - 2*PAD, LINE_H,
+                Color.WHITE, null);
+
+        // Row 7: Status
         String st = fleet.isAlive() ? "Active" : "Respawning";
-        addEntry("Status: " + st, font, panelX + PAD, y - LINE_H * 4, PANEL_W - 2*PAD, LINE_H,
+        addEntry("Status: " + st, font, panelX + PAD, y - LINE_H * 7, PANEL_W - 2*PAD, LINE_H,
                 fleet.isAlive() ? Color.GREEN : Color.RED, null);
 
         // Mouse polling
