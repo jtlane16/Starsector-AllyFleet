@@ -64,15 +64,14 @@ public class AllyTradeAI {
                 float qty = cargo.getCommodityQuantity(good);
                 if (qty <= 0) continue;
                 CommodityOnMarketAPI com = currentMarket.getCommodityData(good);
-                int deficit = com.getDeficitQuantity();
-                AILog.logTrade("  sell-check: " + good + " qty=" + (int)qty + " deficit=" + deficit);
-                if (deficit > 0 && qty > 0) {
-                    float sellQty = Math.min(qty, deficit);
-                    float sellPrice = getSellPrice(com);
-                    float revenue = sellQty * sellPrice;
+                float sellPrice = getSellPrice(com);
+                float revenue = qty * sellPrice;
+                AILog.logTrade("  sell-check: " + good + " qty=" + (int)qty + " price=" + (int)sellPrice);
+                if (revenue > 0 && qty > 0) {
+                    float sellQty = qty;
                     ally.addCredits(revenue);
                     cargo.removeCommodity(good, sellQty);
-                    com.removeFromStockpile(-sellQty); // market buys from us
+                    com.removeFromStockpile(-sellQty);
                     AILog.logTrade("  SOLD " + (int)sellQty + " " + good + " for $" + (int)revenue
                             + " at " + currentMarket.getName());
 
@@ -117,19 +116,16 @@ public class AllyTradeAI {
             if (available > 10 && spendable > 1000) {
                 for (String good : TRADE_GOODS) {
                     CommodityOnMarketAPI com = currentMarket.getCommodityData(good);
-                    int excess = com.getExcessQuantity();
-                    if (excess <= 0) continue;
-
                     float buyPrice = getBuyPrice(com);
-                    int maxBuy = Math.min(excess, (int)(available / com.getCommodity().getCargoSpace()));
+                    int maxBuy = (int)(available / com.getCommodity().getCargoSpace());
                     maxBuy = Math.min(maxBuy, (int)(spendable / Math.max(1, buyPrice)));
 
                     if (maxBuy <= 0) continue;
 
-                    // Check if there's a market to sell to
+                    // Check if a sell destination exists (any market, not just deficit)
                     MarketAPI sellTo = findBestSellMarket(good, maxBuy, fleet);
-                    if (sellTo == null) {
-                        AILog.logTrade("    " + good + ": excess=" + excess + " buyPrice=" + (int)buyPrice
+                    if (sellTo == null || sellTo == currentMarket) {
+                        AILog.logTrade("    " + good + ": price=" + (int)buyPrice
                                 + " maxBuy=" + maxBuy + " — no sell destination, skipping");
                         continue;
                     }
@@ -137,7 +133,7 @@ public class AllyTradeAI {
                     float cost = maxBuy * buyPrice;
                     if (ally.spendCredits(cost)) {
                         cargo.addCommodity(good, maxBuy);
-                        com.addToStockpile(-maxBuy); // market sells to us
+                        com.addToStockpile(-maxBuy);
                         AILog.logTrade("  BOUGHT " + maxBuy + " " + good + " for $" + (int)cost
                                 + " at " + currentMarket.getName() + ", selling at " + sellTo.getName());
 
@@ -321,16 +317,13 @@ public class AllyTradeAI {
     /** Find the best market to SELL a given commodity */
     private static MarketAPI findBestSellMarket(String good, float qty, CampaignFleetAPI fleet) {
         MarketAPI best = null;
-        float bestProfit = 0;
+        float bestPrice = 0;
         for (MarketAPI m : Global.getSector().getEconomy().getMarketsCopy()) {
             if (m.isHidden() || !m.hasSpaceport()) continue;
             if (m.getFaction().isHostileTo(fleet.getFaction())) continue;
             CommodityOnMarketAPI com = m.getCommodityData(good);
-            int deficit = com.getDeficitQuantity();
-            if (deficit <= 0) continue;
             float sellPrice = getSellPrice(com);
-            float profit = Math.min(qty, deficit) * sellPrice;
-            if (profit > bestProfit) { bestProfit = profit; best = m; }
+            if (sellPrice > bestPrice) { bestPrice = sellPrice; best = m; }
         }
         return best;
     }
@@ -346,18 +339,16 @@ public class AllyTradeAI {
             float score = 0;
             for (String good : TRADE_GOODS) {
                 CommodityOnMarketAPI com = m.getCommodityData(good);
-                int excess = com.getExcessQuantity();
-                if (excess <= 0) continue;
                 float buyPrice = getBuyPrice(com);
-                int maxBuy = Math.min(excess, (int)(spendable / Math.max(1, buyPrice)));
+                int maxBuy = (int)(spendable / Math.max(1, buyPrice));
                 if (maxBuy <= 0) continue;
                 MarketAPI sellTo = findBestSellMarket(good, maxBuy, fleet);
-                if (sellTo == null) continue;
+                if (sellTo == null || sellTo == m) continue;
                 float sellPrice = getSellPrice(sellTo.getCommodityData(good));
                 float margin = (sellPrice - buyPrice) * maxBuy;
                 if (margin > 0) score += margin;
             }
-            float distPenalty = Misc.getDistance(fleet.getLocationInHyperspace(), m.getLocationInHyperspace()) / 1000f;
+            float distPenalty = Misc.getDistance(fleet.getLocationInHyperspace(), m.getLocationInHyperspace()) / 500f;
             score -= distPenalty;
             if (score > bestScore) { bestScore = score; best = m; }
         }
