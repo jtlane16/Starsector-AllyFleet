@@ -90,11 +90,9 @@ public class AllyFleetModPlugin extends BaseModPlugin {
         if (overlayWidget != null) return;
         overlayWidget = new AllyFleetOverlayWidget();
 
-        // The ListenerManagerAPI handles dispatch to CampaignUIRenderingListener
-        // and CampaignInputListener implementations automatically.
-        sector.getListenerManager().addListener(overlayWidget, true);
-
-        // register as every-frame script for advance() calls
-        sector.addTransientScript(overlayWidget);
+        // Persistent registration — transient listeners/scripts get
+        // cleaned up immediately, causing the 'flash then vanish' behavior.
+        sector.getListenerManager().addListener(overlayWidget, false);
+        sector.addScript(overlayWidget);
     }
 }
