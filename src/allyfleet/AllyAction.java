@@ -1,22 +1,13 @@
 package allyfleet;
 
 /**
- * Actions an ally fleet can perform, with default priority weights.
+ * Objectives an ally fleet can be assigned.
  */
 public enum AllyAction {
-    FOLLOW("Follow / Escort Player"),
-    DEFEND("Defend Colonies"),
-    TRADE("Trade & Supply"),
-    PATROL("Patrol Systems"),
-    ATTACK("Attack Targets");
+    FOLLOW("Follow / Escort"),
+    TRADE("Trade & Supply");
 
     private final String displayName;
-
-    AllyAction(String displayName) {
-        this.displayName = displayName;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
+    AllyAction(String displayName) { this.displayName = displayName; }
+    public String getDisplayName() { return displayName; }
 }

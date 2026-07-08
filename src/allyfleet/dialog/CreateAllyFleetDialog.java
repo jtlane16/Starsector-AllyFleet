@@ -68,10 +68,7 @@ public class CreateAllyFleetDialog implements InteractionDialogPlugin {
     private void handleCmd(String cmd) {
         switch (cmd) {
             case "inc_follow": adjPrio(AllyAction.FOLLOW); break;
-            case "inc_defend": adjPrio(AllyAction.DEFEND); break;
             case "inc_trade": adjPrio(AllyAction.TRADE); break;
-            case "inc_patrol": adjPrio(AllyAction.PATROL); break;
-            case "inc_attack": adjPrio(AllyAction.ATTACK); break;
             case "disband": disband(); break;
             default: state = DState.INIT; showMainMenu(); return;
         }
@@ -191,8 +188,6 @@ public class CreateAllyFleetDialog implements InteractionDialogPlugin {
             int p = fleet.getPriority(a);
             options.addOption(a.getDisplayName() + ": " + p, "inc_" + a.name().toLowerCase());
         }
-
-        textPanel.addParagraph("");
         options.addOption("Disband Fleet (Irreversible!)", "disband");
         options.addOption("Back", DState.FLEET_SELECT);
     }

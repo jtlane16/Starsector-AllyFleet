@@ -141,10 +141,7 @@ public class AllyFleet {
         AllyAction best = null;
         int bestPrio = 0;
         if (priorityFollow > bestPrio) { best = AllyAction.FOLLOW; bestPrio = priorityFollow; }
-        if (priorityDefend > bestPrio) { best = AllyAction.DEFEND; bestPrio = priorityDefend; }
         if (priorityTrade > bestPrio) { best = AllyAction.TRADE; bestPrio = priorityTrade; }
-        if (priorityPatrol > bestPrio) { best = AllyAction.PATROL; bestPrio = priorityPatrol; }
-        if (priorityAttack > bestPrio) { best = AllyAction.ATTACK; bestPrio = priorityAttack; }
         return best;
     }
 
@@ -152,10 +149,7 @@ public class AllyFleet {
     public int getPriority(AllyAction action) {
         switch (action) {
             case FOLLOW: return priorityFollow;
-            case DEFEND: return priorityDefend;
             case TRADE: return priorityTrade;
-            case PATROL: return priorityPatrol;
-            case ATTACK: return priorityAttack;
             default: return 0;
         }
     }
@@ -164,10 +158,7 @@ public class AllyFleet {
         value = Math.max(0, Math.min(100, value));
         switch (action) {
             case FOLLOW: priorityFollow = value; break;
-            case DEFEND: priorityDefend = value; break;
             case TRADE: priorityTrade = value; break;
-            case PATROL: priorityPatrol = value; break;
-            case ATTACK: priorityAttack = value; break;
         }
     }
 
