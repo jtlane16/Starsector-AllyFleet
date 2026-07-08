@@ -25,15 +25,14 @@ import java.util.List;
  */
 public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, EveryFrameScript {
 
-    // ── Layout (screen pixels) ─────────────────────────────────────
+    // Layout constants
     private static final float PAD = 6f;
     private static final float LINE_H = 18f;
     private static final float PANEL_W = 200f;
+    private static final float PANEL_H = 95f;  // 4 rows + padding
     private static final float TOP_OFFSET = 40f;
     private static final float RIGHT_OFFSET = 10f;
-
-    // Computed each frame
-    private float panelX, panelY, panelH;
+    private float panelX, panelY;
     private final List<LabelEntry> entries = new ArrayList<>();
     private boolean done = false;
 
@@ -60,24 +59,28 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Ever
         float sh = Global.getSettings().getScreenHeight();
         panelX = sw - PANEL_W - RIGHT_OFFSET;
         panelY = sh - TOP_OFFSET;
-        panelH = LINE_H * 3 + PAD * 4;
 
         String font = Fonts.ORBITRON_12;
         float y = panelY;
 
-        // Header
+        // Row 1: Fleet name
         addEntry(fleet.getFleetName(), font, panelX + PAD, y - LINE_H, PANEL_W - 2*PAD, LINE_H,
                 Misc.getBasePlayerColor(), null);
 
-        // Objective (clickable)
+        // Row 2: Current objective (info only)
         AllyAction current = currentObjective(fleet);
         addEntry("Objective: " + current.getDisplayName(), font,
                 panelX + PAD, y - LINE_H * 2, PANEL_W - 2*PAD, LINE_H,
-                Color.CYAN, () -> cycleObjective(fleet));
+                Color.CYAN, null);
 
-        // Status
+        // Row 3: Button — "> Change Objective"
+        addEntry("> Change Objective <", font,
+                panelX + PAD, y - LINE_H * 3, PANEL_W - 2*PAD, LINE_H,
+                Color.ORANGE, () -> cycleObjective(fleet));
+
+        // Row 4: Status
         String st = fleet.isAlive() ? "Active" : "Respawning";
-        addEntry("Status: " + st, font, panelX + PAD, y - LINE_H * 3, PANEL_W - 2*PAD, LINE_H,
+        addEntry("Status: " + st, font, panelX + PAD, y - LINE_H * 4, PANEL_W - 2*PAD, LINE_H,
                 fleet.isAlive() ? Color.GREEN : Color.RED, null);
 
         // ── Mouse click detection ──────────────────────────────────
@@ -150,8 +153,8 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Ever
         GL11.glColor4f(0.08f, 0.08f, 0.12f, 0.70f * alpha);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glBegin(GL11.GL_QUADS);
-        GL11.glVertex2f(panelX, panelY - panelH);
-        GL11.glVertex2f(panelX + PANEL_W, panelY - panelH);
+        GL11.glVertex2f(panelX, panelY - PANEL_H);
+        GL11.glVertex2f(panelX + PANEL_W, panelY - PANEL_H);
         GL11.glVertex2f(panelX + PANEL_W, panelY);
         GL11.glVertex2f(panelX, panelY);
         GL11.glEnd();
@@ -159,8 +162,8 @@ public class AllyFleetOverlayWidget implements CampaignUIRenderingListener, Ever
         // Border
         GL11.glColor4f(0.3f, 0.5f, 1.0f, 0.5f * alpha);
         GL11.glBegin(GL11.GL_LINE_LOOP);
-        GL11.glVertex2f(panelX, panelY - panelH);
-        GL11.glVertex2f(panelX + PANEL_W, panelY - panelH);
+        GL11.glVertex2f(panelX, panelY - PANEL_H);
+        GL11.glVertex2f(panelX + PANEL_W, panelY - PANEL_H);
         GL11.glVertex2f(panelX + PANEL_W, panelY);
         GL11.glVertex2f(panelX, panelY);
         GL11.glEnd();
